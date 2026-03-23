@@ -10,6 +10,11 @@ import time
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
+import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ══════════════════════════════════════════════════════════════
 # CONSTANTS
@@ -67,6 +72,27 @@ ATTACK_EXPLAIN = {
         "features": ["AIT202 > 12.0 (pH danger threshold)", "dosing pump state mismatch"],
     },
 }
+
+OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY')
+
+def chat_with_openrouter(message):
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "openai/gpt-3.5-turbo",
+        "messages": [{"role": "user", "content": message}]
+    }
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        if response.status_code == 200:
+            return response.json()["choices"][0]["message"]["content"]
+        else:
+            return f"Error: {response.status_code} - {response.text}"
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 RULE_EXPLAIN = {
     "PHYSICAL: Tank Overflow Imminent":  "Physics rule: LIT101 > 900 mm — tank approaching physical overflow limit.",
@@ -782,7 +808,7 @@ st.markdown("---")
 # ══════════════════════════════════════════════════════════════
 # TABS
 # ══════════════════════════════════════════════════════════════
-tab_live, tab_synthetic = st.tabs(["🖥️  Live Monitoring", "🧪  Synthetic Dataset Evaluation"])
+tab_live, tab_synthetic, tab_chatbot = st.tabs(["🖥️  Live Monitoring", "🧪  Synthetic Dataset Evaluation", "🤖 Chatbot"])
 
 # ──────────────────────────────────────────────────────────────
 # TAB 1 — LIVE MONITORING
@@ -1061,3 +1087,31 @@ with tab_synthetic:
 - Full confusion matrix, per-attack detection rate, score distribution, and tuning advice
 - Download the scored CSV to retrain / fine-tune your model offline
         """)
+
+# ──────────────────────────────────────────────────────────────
+# TAB 3 — CHATBOT
+# ──────────────────────────────────────────────────────────────
+with tab_chatbot:
+    st.markdown("### 🤖 AI Chatbot")
+    st.caption("Chat with an AI assistant powered by OpenRouter.")
+
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+
+    with st.form(key="chat_form"):
+        user_input = st.text_input("Type your message here:")
+        submit_button = st.form_submit_button("Send")
+
+    if submit_button and user_input.strip():
+        with st.spinner("Thinking..."):
+            response = chat_with_openrouter(user_input.strip())
+        st.session_state.chat_history.append({"user": user_input.strip(), "bot": response})
+
+    st.markdown("---")
+
+    chat_container = st.container()
+    with chat_container:
+        for msg in st.session_state.chat_history:
+            st.markdown(f"**You:** {msg['user']}")
+            st.markdown(f"**Bot:** {msg['bot']}")
+            st.markdown("---")

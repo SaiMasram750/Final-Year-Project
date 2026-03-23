@@ -8,4 +8,6 @@ fastapi
 uvicorn
 numpy
 joblib
+requests
+python-dotenv
 sentence-transformers
