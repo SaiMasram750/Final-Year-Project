@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Dict
-import random
 import joblib
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -18,9 +17,6 @@ class SensorData(BaseModel):
     pH: float
     tank_level: float
 
-class ChatRequest(BaseModel):
-    query: str
-
 class EmbedRequest(BaseModel):
     text: str
 
@@ -32,6 +28,8 @@ logs: List[Dict] = []
 def predict(data: SensorData):
     features = np.array([[data.flow, data.pH, data.tank_level]])
     anomaly_score_raw = iso_model.decision_function(features)[0]
+
+    # Normalize to 0–1 range
     anomaly_score = (anomaly_score_raw + 0.5) * 2
     anomaly_score = max(0, min(1, anomaly_score))
 
@@ -43,24 +41,22 @@ def predict(data: SensorData):
         "severity": severity,
         "alert": alert
     }
+
     logs.append({"type": "prediction", "data": result})
     return result
 
-@app.post("/chat")
-def chat(request: ChatRequest):
-    response_text = f"AI Assistant: Based on your query '{request.query}', anomaly scores are being monitored."
-    result = {"response": response_text}
-    logs.append({"type": "chat", "data": result})
-    return result
 
 @app.post("/embed")
 def embed_text(request: EmbedRequest):
     embedding = embed_model.encode(request.text).tolist()
+    logs.append({"type": "embedding", "data": {"text": request.text}})
     return {"embedding": embedding}
+
 
 @app.get("/logs")
 def get_logs():
     return {"logs": logs}
+
 
 @app.get("/health")
 def health_check():
